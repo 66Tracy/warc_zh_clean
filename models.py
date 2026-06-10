@@ -21,6 +21,8 @@ class CleanContext:
         reject_reason: Short reason string if rejected.
         reject_detail: Detailed reject info if rejected.
         text_removed_none: Whether text became empty after cleaning.
+        quality_signals: Dict of intermediate quality metrics written by filter rules
+            (e.g. density hits). Populated in-place; never causes a reject on its own.
     """
 
     __slots__ = (
@@ -35,6 +37,7 @@ class CleanContext:
         "reject_reason",
         "reject_detail",
         "text_removed_none",
+        "quality_signals",
     )
 
     def __init__(self, record: dict) -> None:
@@ -50,6 +53,7 @@ class CleanContext:
         self.reject_reason = ""
         self.reject_detail = ""
         self.text_removed_none = False
+        self.quality_signals: dict = {}
 
     def reject(self, reason: str, detail: str = "") -> None:
         """Mark this context as rejected.

@@ -5,6 +5,8 @@ This module contains ONLY data — no business logic.
 """
 
 import re
+from dataclasses import dataclass, field
+from typing import Tuple
 
 # ============================================================================
 # Optional dependency behaviour
@@ -18,8 +20,34 @@ STRICT_OPTIONAL_DEPS = False  # Set True to raise ImportError on missing optiona
 
 MIN_TEXT_LEN = 256
 FINAL_TEXT_LENGTH_RATIO_THRESHOLD = 0.5
-BAD_KEYWORD_HIT_THRESHOLD = 2
+BAD_KEYWORD_HIT_THRESHOLD = 2  # legacy, no longer used by chapter_filter (kept for back-compat)
 LENGTH_RATIO_EPSILON = 1e-7
+
+# ============================================================================
+# Density rule dataclass
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class DensityRule:
+    """A count-based pre-filter rule that scales with document length.
+
+    Attributes:
+        name:             Identifier used in the reject detail string.
+        counter:          How to count hits.  Two forms:
+                          ``"substr:<s>"``  — ``text.count(<s>)``
+                          ``"regex:<pat>"`` — ``len(re.findall(<pat>, text))``
+        max_per_kilo:     Maximum hits allowed per 1 000 characters (soft threshold).
+        min_count:        Absolute hit count below which the rule never triggers
+                          (protects short documents from false positives).
+        category_exempt:  Tuple of category strings that bypass this rule.
+    """
+
+    name: str
+    counter: str
+    max_per_kilo: float
+    min_count: int = 3
+    category_exempt: Tuple[str, ...] = field(default_factory=tuple)
 
 # ============================================================================
 # Category downsampling
@@ -93,7 +121,279 @@ PRE_QQ_COUNT_LIMIT = 6
 PRE_WECHAT_COUNT_LIMIT = 6
 PRE_ELLIPSIS_UNICODE_LIMIT = 20
 PRE_ELLIPSIS_ASCII_LIMIT = 10
-PRE_DATE_BRACKET_LIMIT = 15
+PRE_DATE_BRACKET_LIMIT = 15  # legacy constant kept for reference; rule now in MISC_DENSITY_RULES
+
+# ============================================================================
+# Density rules (MISC_DENSITY_RULES)
+#
+# Anchored at a "typical 2000-char document":
+#   max_per_kilo  ≈ old_absolute_limit / 2.0
+#   min_count     = max(3, old_absolute_limit // 2)
+#
+# counter syntax:
+#   "substr:<s>"  -> text.count(<s>)
+#   "regex:<pat>" -> len(re.findall(<pat>, text))
+# ============================================================================
+
+MISC_DENSITY_RULES: list = [
+    # ---- ellipsis lines ----
+    # old: lines ending "..." or "…" > PRE_ELLIPSIS_LINE_LIMIT (8)
+    # Note: this is applied to the lines list, handled via regex on full text
+    # Approximated as: count of "\n...\n" or trailing ellipsis patterns
+    DensityRule(
+        name="ellipsis_line",
+        counter=r"regex:(?m)(?:\.\.\.|…)\s*$",
+        max_per_kilo=4.0,
+        min_count=4,
+    ),
+    # ---- datetime stamps "YYYY-MM-DD HH:MM:SS" ----
+    # old: >= PRE_DATETIME_DENSITY_LIMIT (4)
+    DensityRule(
+        name="datetime_stamp",
+        counter=r"regex:\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}",
+        max_per_kilo=2.0,
+        min_count=3,
+    ),
+    # ---- spaces between CJK characters ----
+    # old: > PRE_BLANK_ZH_ZH_LIMIT (50)
+    DensityRule(
+        name="blank_zh_zh",
+        counter=r"regex:[一-鿿]\s[一-鿿]",
+        max_per_kilo=25.0,
+        min_count=25,
+    ),
+    # ---- language transitions CJK-alpha-CJK ----
+    # old: > PRE_LANG_TRANS_LIMIT (30)
+    DensityRule(
+        name="lang_trans",
+        counter=r"regex:[一-鿿][a-zA-Z][一-鿿]",
+        max_per_kilo=15.0,
+        min_count=15,
+    ),
+    # ---- ASCII ellipsis "..." count ----
+    # old: >= PRE_ELLIPSIS_COUNT_LIMIT (15)
+    DensityRule(
+        name="ellipsis_ascii",
+        counter="substr:...",
+        max_per_kilo=7.0,
+        min_count=7,
+    ),
+    # ---- MB pattern "\d+mb" ----
+    # old: > PRE_MB_PATTERN_LIMIT (8), exempt 编程/IT
+    DensityRule(
+        name="mb_pattern",
+        counter=r"regex:\d+\s?mb",
+        max_per_kilo=4.0,
+        min_count=4,
+        category_exempt=("编程/IT",),
+    ),
+    # ---- empty parens "()" ----
+    # old: >= PRE_EMPTY_PAREN_LIMIT (8), exempt 编程/IT (also "`" check handled in code)
+    DensityRule(
+        name="empty_paren",
+        counter="substr:()",
+        max_per_kilo=4.0,
+        min_count=4,
+        category_exempt=("编程/IT",),
+    ),
+    # ---- "吗？" question marks ----
+    # old: >= PRE_QUESTION_MARK_LIMIT (20)
+    DensityRule(
+        name="question_mark",
+        counter="substr:吗？",
+        max_per_kilo=10.0,
+        min_count=10,
+    ),
+    # ---- "天前回复" forum noise ----
+    # old: >= PRE_REPLY_DAY_LIMIT (5)
+    DensityRule(
+        name="reply_day",
+        counter="substr:天前回复",
+        max_per_kilo=2.5,
+        min_count=3,
+    ),
+    # ---- "！" + "？" combined ----
+    # old: >= PRE_EXCL_QUESTION_LIMIT (30)
+    DensityRule(
+        name="excl_question",
+        counter=r"regex:[！？]",
+        max_per_kilo=15.0,
+        min_count=15,
+    ),
+    # ---- "座" seat indicator ----
+    # old: >= PRE_SEAT_LIMIT (40)
+    DensityRule(
+        name="seat",
+        counter="substr:座",
+        max_per_kilo=20.0,
+        min_count=20,
+    ),
+    # ---- "分钟前回复" ----
+    # old: >= PRE_REPLY_MIN_LIMIT (5)
+    DensityRule(
+        name="reply_min",
+        counter="substr:分钟前回复",
+        max_per_kilo=2.5,
+        min_count=3,
+    ),
+    # ---- "小时前回复" ----
+    # old: >= PRE_REPLY_HOUR_LIMIT (5)
+    DensityRule(
+        name="reply_hour",
+        counter="substr:小时前回复",
+        max_per_kilo=2.5,
+        min_count=3,
+    ),
+    # ---- "澳门" Macau gambling signal ----
+    # old: >= PRE_MACAO_LIMIT (20)
+    DensityRule(
+        name="macao",
+        counter="substr:澳门",
+        max_per_kilo=10.0,
+        min_count=10,
+    ),
+    # ---- "癫痫病" medical spam ----
+    # old: >= PRE_EPILEPSY_LIMIT (10)
+    DensityRule(
+        name="epilepsy",
+        counter="substr:癫痫病",
+        max_per_kilo=5.0,
+        min_count=5,
+    ),
+    # ---- "【" full-width bracket ----
+    # old: >= PRE_BRACKET_LIMIT (50)
+    DensityRule(
+        name="bracket",
+        counter="substr:【",
+        max_per_kilo=25.0,
+        min_count=25,
+    ),
+    # ---- "彩票" lottery ----
+    # old: >= PRE_LOTTERY_LIMIT (10)
+    DensityRule(
+        name="lottery",
+        counter="substr:彩票",
+        max_per_kilo=5.0,
+        min_count=5,
+    ),
+    # ---- "买球" sports betting ----
+    # old: >= PRE_BET_LIMIT (5)
+    DensityRule(
+        name="bet",
+        counter="substr:买球",
+        max_per_kilo=2.5,
+        min_count=3,
+    ),
+    # ---- "<URL>" placeholder ----
+    # old: > PRE_URL_COUNT_LIMIT (5)
+    DensityRule(
+        name="url_placeholder",
+        counter="substr:<URL>",
+        max_per_kilo=2.5,
+        min_count=3,
+    ),
+    # ---- "<EMAIL>" placeholder ----
+    # old: > PRE_EMAIL_COUNT_LIMIT (3)
+    DensityRule(
+        name="email_placeholder",
+        counter="substr:<EMAIL>",
+        max_per_kilo=1.5,
+        min_count=3,
+    ),
+    # ---- "QQ" account spam ----
+    # old: > PRE_QQ_COUNT_LIMIT (6)
+    DensityRule(
+        name="qq",
+        counter="substr:QQ",
+        max_per_kilo=3.0,
+        min_count=3,
+    ),
+    # ---- "微信" WeChat spam ----
+    # old: > PRE_WECHAT_COUNT_LIMIT (6)
+    DensityRule(
+        name="wechat",
+        counter="substr:微信",
+        max_per_kilo=3.0,
+        min_count=3,
+    ),
+    # ---- "…" unicode ellipsis ----
+    # old: >= PRE_ELLIPSIS_UNICODE_LIMIT (20)
+    DensityRule(
+        name="ellipsis_unicode",
+        counter="substr:…",
+        max_per_kilo=10.0,
+        min_count=10,
+    ),
+    # ---- "[DD-DD]" date bracket pattern ----
+    # old: >= PRE_DATE_BRACKET_LIMIT (15)
+    DensityRule(
+        name="date_bracket",
+        counter=r"regex:\[\d{2}-\d{2}\]",
+        max_per_kilo=7.0,
+        min_count=7,
+    ),
+]
+
+# ============================================================================
+# Bad keyword scoring
+# ============================================================================
+
+# Scoring thresholds for bad-keyword weighted sum filter
+BAD_KEYWORD_SCORE_MIN: float = 3.0          # absolute minimum score to trigger
+BAD_KEYWORD_SCORE_PER_KILO: float = 1.0    # score per 1 000 chars to trigger
+
+# Per-keyword weights.  Keys not present default to 1.0.
+# weight 2.0  -> unambiguous strong garbage signal (core porn/gambling terms)
+# weight 0.5  -> edge terms that appear often in legitimate text
+BAD_KEYWORD_WEIGHTS: dict = {
+    # ---- core pornographic terms (weight 2.0) ----
+    "操逼": 2.0, "肏你": 2.0, "肏死": 2.0, "操死": 2.0, "狂操": 2.0,
+    "狂插": 2.0, "强奸": 2.0, "强暴": 2.0, "轮奸": 2.0, "轮暴": 2.0,
+    "强jian": 2.0, "乱伦": 2.0, "乱交": 2.0, "群交": 2.0, "肛交": 2.0,
+    "口交": 2.0, "阴道": 2.0, "阴茎": 2.0, "阴唇": 2.0, "阴蒂": 2.0,
+    "肉棒": 2.0, "鸡巴": 2.0, "鸡吧": 2.0, "屌": 2.0, "淫荡": 2.0,
+    "淫乱": 2.0, "淫穴": 2.0, "骚逼": 2.0, "骚屄": 2.0, "嫩逼": 2.0,
+    "肏": 2.0, "插逼": 2.0, "插比": 2.0, "屄": 2.0, "后庭": 2.0,
+    "兽交": 2.0, "兽奸": 2.0, "幼交": 2.0, "幼女": 2.0, "幼男": 2.0,
+    "色情网站": 2.0, "色情片": 2.0, "成人网站": 2.0, "成人av": 2.0,
+    "av视频": 2.0, "av在线": 2.0, "日本av": 2.0, "欧美av": 2.0,
+    "porn": 2.0, "hardcore": 2.0, "incest": 2.0,
+    # ---- core gambling/illegal terms (weight 2.0) ----
+    "澳门威尼斯人": 2.0, "澳门新葡京": 2.0, "皇冠博彩": 2.0, "皇冠正网": 2.0,
+    "在线博彩": 2.0, "网赌": 2.0, "线上买球": 2.0, "购彩": 2.0,
+    "平台买球": 2.0, "投注": 2.0, "押注": 2.0, "开奖直播现场": 2.0,
+    "彩票官方": 2.0, "澳门彩": 2.0, "时时彩": 2.0, "竞彩预测": 2.0,
+    "法轮功": 2.0, "失身粉": 2.0, "迷奸粉": 2.0, "迷奸药": 2.0,
+    "摇头丸": 2.0, "morphine": 2.0, "narcotic": 2.0,
+    # ---- edge/borderline terms (weight 0.5) ----
+    # These commonly appear in legitimate contexts (literature, medicine, news)
+    "按摩": 0.5,        # massage — health/medical context common
+    "情趣用品": 0.5,    # can appear in news/regulation context
+    "白痴": 0.5,        # insult but also casual/literary use
+    "卧槽": 0.5,        # mild expletive in casual Chinese text
+    "草泥马": 0.5,      # internet slang, often not explicitly sexual
+    "傻逼": 0.5,        # common mild insult in casual text
+    "婊子": 0.5,        # can appear in literary/news context
+    "人渣": 0.5,        # common derogatory but widely used in news
+    "无耻": 0.5,        # common moral judgment in normal text
+    "裸露": 0.5,        # nudity — art/news/medical context common
+    "写真": 0.5,        # photo set — legitimate photography term
+    "调教": 0.5,        # training/taming — legitimate in animal/education context
+    "偷拍": 0.5,        # candid photography — can appear in news
+    "丝袜": 0.5,        # stockings — fashion context common
+    "性生活": 0.5,      # sexual health — medical/educational context
+    "精子": 0.5,        # biology/medical
+    "乳房": 0.5,        # anatomy — medical/literary context
+    "高潮": 0.5,        # climax — also used in music/drama/literature
+    "推油": 0.5,        # massage term — can appear in normal context
+    "自拍": 0.5,        # selfie — completely normal term
+    "在线视频": 0.5,    # online video — ubiquitous normal term
+    "国产精品": 0.5,    # "domestic quality products" — legitimate e-commerce
+    "sm": 0.5,          # abbreviation with many legitimate uses
+    "美少女": 0.5,      # can appear in anime/cultural context
+    "人妻": 0.5,        # married woman — in literature/drama/news
+    "发情": 0.5,        # can appear in biology/animal context
+}
 
 # ============================================================================
 # Post-filtering thresholds
