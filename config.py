@@ -49,6 +49,27 @@ class DensityRule:
     min_count: int = 3
     category_exempt: Tuple[str, ...] = field(default_factory=tuple)
 
+
+@dataclass(frozen=True)
+class LineComboRule:
+    """A keyword-combination line-deletion rule for _is_bad_line.
+
+    Attributes:
+        name:      Human-readable identifier for debugging.
+        all_of:    Substrings that must ALL be present in the line.
+        any_of:    At least one of these substrings must be present
+                   (empty tuple means no constraint).
+        max_len:   Rule only fires when ``len(line) < max_len``.
+                   ``None`` means no length constraint.
+        lowercase: If True, apply ``line.lower()`` before matching.
+    """
+
+    name: str
+    all_of: tuple = ()
+    any_of: tuple = ()
+    max_len: int | None = None
+    lowercase: bool = False
+
 # ============================================================================
 # Category downsampling
 # ============================================================================
@@ -442,6 +463,122 @@ LINE_GT_MIN = 2
 LINE_BRACKET_DENSE_BRACKET = 3
 LINE_PIPE_MIN = 3
 LINE_TAIL_LAST_LINE_MAX_LEN = 30
+
+# ============================================================================
+# Line combo rules (keyword-combination line-deletion rules)
+# ============================================================================
+
+LINE_COMBO_RULES: list = [
+    # ---- navigation bars ----
+    LineComboRule(
+        name="nav_home_end",
+        all_of=("首页", "尾页", "1"),
+    ),
+    LineComboRule(
+        name="nav_guillemet",
+        all_of=("«", "1", "2"),
+    ),
+    # ---- address line ----
+    LineComboRule(
+        name="address_line",
+        all_of=("地址：",),
+    ),
+    # ---- porn video ----
+    LineComboRule(
+        name="porn_video",
+        all_of=("污", "视频"),
+    ),
+    # ---- gambling/adult keywords combined with "app" ----
+    LineComboRule(
+        name="gambling_app",
+        any_of=("电竞", "体育", "博", "彩", "大片", "竞猜", "bob", "18禁",
+                "直播", "传媒", "真人", "赚钱", "无码", "影视", "高清", "提现"),
+        all_of=("app",),
+        lowercase=True,
+    ),
+    # ---- sports + gambling without app ----
+    LineComboRule(
+        name="sports_gambling",
+        all_of=("体育", "博"),
+    ),
+    # ---- website maintenance / font setting (short lines only) ----
+    LineComboRule(
+        name="website_maint",
+        all_of=("网站", "维护"),
+        max_len=LINE_WEBSITE_MAINT_MAX_LEN,
+    ),
+    LineComboRule(
+        name="font_setting",
+        all_of=("字体：",),
+        max_len=LINE_WEBSITE_MAINT_MAX_LEN,
+    ),
+    # ---- read full text (short lines only) ----
+    LineComboRule(
+        name="read_full",
+        all_of=("阅读", "全文"),
+        max_len=LINE_READ_FULL_MAX_LEN,
+    ),
+    # ---- view & reply ----
+    LineComboRule(
+        name="view_reply",
+        all_of=("查看:", "回复:"),
+    ),
+    # ---- register + login/password combos (short lines only) ----
+    LineComboRule(
+        name="register_login",
+        all_of=("注册",),
+        any_of=("登录", "登陆", "密码"),
+        max_len=LINE_REGISTER_MAX_LEN,
+    ),
+    LineComboRule(
+        name="phone_fax",
+        all_of=("电话", "传真"),
+        max_len=LINE_REGISTER_MAX_LEN,
+    ),
+    LineComboRule(
+        name="prev_article",
+        all_of=("上篇：",),
+        max_len=LINE_REGISTER_MAX_LEN,
+    ),
+    LineComboRule(
+        name="next_article",
+        all_of=("下篇：",),
+        max_len=LINE_REGISTER_MAX_LEN,
+    ),
+    # ---- WeChat follow (short lines only) ----
+    LineComboRule(
+        name="wechat_follow",
+        all_of=("关注", "微信"),
+        max_len=LINE_WECHAT_FOLLOW_MAX_LEN,
+    ),
+    # ---- publish info (short lines only) ----
+    LineComboRule(
+        name="publish_info",
+        all_of=("本文", "发表于"),
+        max_len=LINE_PUBLISH_INFO_MAX_LEN,
+    ),
+    # ---- next page with number ----
+    LineComboRule(
+        name="next_page_num",
+        all_of=("下一页", "1"),
+    ),
+    # ---- SEO ranking ----
+    LineComboRule(
+        name="seo_rank",
+        all_of=("seo", "排"),
+        lowercase=True,
+    ),
+    # ---- Macao gambling ----
+    LineComboRule(
+        name="macao_casino",
+        all_of=("澳门",),
+        any_of=("葡", "莆"),
+    ),
+    LineComboRule(
+        name="macao_venetian",
+        all_of=("澳门", "威", "尼"),
+    ),
+]
 
 # ============================================================================
 # Tail/head cleanup keywords

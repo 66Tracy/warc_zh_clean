@@ -42,6 +42,20 @@ def _is_bad_line2(text: str) -> bool:
     return True
 
 
+def _match_combo_rule(line: str, rule: "C.LineComboRule") -> bool:
+    """Return True if *line* matches the given LineComboRule (line should be removed)."""
+    text = line.lower() if rule.lowercase else line
+    if rule.max_len is not None and len(line) >= rule.max_len:
+        return False
+    for s in rule.all_of:
+        if s not in text:
+            return False
+    if rule.any_of:
+        if not any(s in text for s in rule.any_of):
+            return False
+    return True
+
+
 def _is_bad_line(line: str) -> bool:
     """Main line-level bad line detector.
 
@@ -50,7 +64,7 @@ def _is_bad_line(line: str) -> bool:
     if line.strip() == "":
         return True
 
-    zh_chars = re.findall("[\u4e00-\u9fff]", line)
+    zh_chars = re.findall("[一-鿿]", line)
     en_chars = re.findall(r"[A-Za-z\s]", line)
 
     # Contact info in short lines
@@ -92,13 +106,11 @@ def _is_bad_line(line: str) -> bool:
     if len(en_chars) == len(line) and len(line) <= C.LINE_SHORT_EN_MAX_LEN and len(line.split()) <= C.LINE_SHORT_EN_MAX_WORDS:
         return False
 
-    # Navigation patterns
-    if "首页" in line and "尾页" in line and "1" in line:
-        return False
-    if "\u00ab" in line and "1" in line and "2" in line:
-        return False
-    if "地址：" in line:
-        return False
+    # Keyword-combination rules (data-driven)
+    for _rule in C.LINE_COMBO_RULES:
+        if _match_combo_rule(line, _rule):
+            return False
+
     if line.endswith("上一篇") or line.endswith("下一篇"):
         return False
     if line.count("Q微") > 2:
@@ -131,77 +143,6 @@ def _is_bad_line(line: str) -> bool:
         or "浏览次数：" in line
         or "点击次数：" in line
     ):
-        return False
-
-    # Porn video pattern
-    if "污" in line and "视频" in line:
-        return False
-
-    # Porn/gambling keywords with app
-    if (
-        "电竞" in line
-        or "体育" in line
-        or "博" in line
-        or "彩" in line
-        or "大片" in line
-        or "竞猜" in line
-        or "bob" in line.lower()
-        or "18禁" in line
-        or "直播" in line
-        or "传媒" in line
-        or "真人" in line
-        or "赚钱" in line
-        or "无码" in line
-        or "影视" in line
-        or "高清" in line
-        or "提现" in line
-    ) and "app" in line.lower():
-        return False
-
-    if "体育" in line and "博" in line:
-        return False
-
-    # Website maintenance / font
-    if (("网站" in line and "维护" in line) or "字体：" in line) and len(line) < C.LINE_WEBSITE_MAINT_MAX_LEN:
-        return False
-
-    # Read full text
-    if "阅读" in line and "全文" in line and len(line) < C.LINE_READ_FULL_MAX_LEN:
-        return False
-
-    # View/reply pattern
-    if "查看:" in line and "回复:" in line:
-        return False
-
-    # Register/login pattern
-    if (
-        ("注册" in line and ("登录" in line or "登陆" in line or "密码" in line))
-        or ("电话" in line and "传真" in line)
-        or "上篇：" in line
-        or "下篇：" in line
-    ) and len(line) < C.LINE_REGISTER_MAX_LEN:
-        return False
-
-    # WeChat follow
-    if "关注" in line and "微信" in line and len(line) < C.LINE_WECHAT_FOLLOW_MAX_LEN:
-        return False
-
-    # Publish info
-    if "本文" in line and "发表于" in line and len(line) < C.LINE_PUBLISH_INFO_MAX_LEN:
-        return False
-
-    # Next page
-    if "下一页" in line and "1" in line:
-        return False
-
-    # SEO
-    if "seo" in line.lower() and "排" in line:
-        return False
-
-    # Macao gambling
-    if "澳门" in line and ("葡" in line or "莆" in line):
-        return False
-    if "澳门" in line and "威" in line and "尼" in line:
         return False
 
     # Very short lines
@@ -296,7 +237,7 @@ def _line_deleting(text: str) -> str:
     # Last line cleanup
     if len(res) > 0:
         last_line = res[-1]
-        last_line_no_zh = len(re.findall("[\u4e00-\u9fff]", last_line)) == 0
+        last_line_no_zh = len(re.findall("[一-鿿]", last_line)) == 0
         if (
             (last_line_no_zh and len(last_line.strip()) <= C.LINE_TAIL_LAST_LINE_MAX_LEN)
             or "Copyright".lower() in last_line.lower()
@@ -333,13 +274,13 @@ def _line_deleting(text: str) -> str:
     final_res = (
         "\n".join(new_lines)
         .replace(r"<\/p>", "\n")
-        .replace("\u3000\u3000", "\n\n")
+        .replace("　　", "\n\n")
         .replace("\n\n\n", "\n\n")
         .replace("\n\n\n", "\n\n")
         .replace("\n\n\n", "\n\n")
         .strip()
     )
-    final_res = C.SPACES_4_RE.sub("    ", final_res).replace("\\$", "$").replace("\ufeff ", "").replace("``````", "```")
+    final_res = C.SPACES_4_RE.sub("    ", final_res).replace("\\$", "$").replace("﻿ ", "").replace("``````", "```")
 
     return final_res
 
