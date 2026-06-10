@@ -6,7 +6,6 @@ from warc_zh_clean.rules.chapter_filter import (
     _check_length,
     _check_category,
     _check_zlib,
-    _check_basic_quality,
     _check_duplicate_fraction,
     _has_frequent_ngram,
 )
@@ -35,18 +34,6 @@ def test_check_category_ok():
     passed, detail = _check_category("科技")
     assert passed is True
 
-
-def test_check_basic_quality_normal():
-    text = "这是一段正常的文档内容。\n第二行有更多内容。\n第三行继续。"
-    passed, detail = _check_basic_quality(text)
-    assert passed is True
-
-
-def test_check_basic_quality_high_symbol_rate():
-    text = "!@#$%^&*()_+" * 50
-    passed, detail = _check_basic_quality(text)
-    assert passed is False
-    assert detail == "non_cjk_ratio_high"
 
 
 def test_check_duplicate_fraction_normal():

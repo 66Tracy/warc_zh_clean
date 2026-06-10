@@ -17,6 +17,10 @@ steps:
     type: rule
     class: LineCleanRule
 
+  - name: quality_signals
+    type: rule
+    class: QualitySignalsRule
+
   - name: post_length_filter
     type: rule
     class: PostLengthFilterRule

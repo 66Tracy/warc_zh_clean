@@ -9,6 +9,7 @@ from warc_zh_clean.rules.pre_clean import PreCleanRule
 from warc_zh_clean.rules.chapter_filter import ChapterFilterRule
 from warc_zh_clean.rules.line_clean import LineCleanRule
 from warc_zh_clean.rules.post_filter import PostLengthFilterRule, RatioFilterRule
+from warc_zh_clean.rules.quality_signals import QualitySignalsRule
 from warc_zh_clean.pipelines.hooks import set_text_len
 
 
@@ -17,6 +18,7 @@ RULE_REGISTRY = {
     "PreCleanRule": PreCleanRule,
     "ChapterFilterRule": ChapterFilterRule,
     "LineCleanRule": LineCleanRule,
+    "QualitySignalsRule": QualitySignalsRule,
     "PostLengthFilterRule": PostLengthFilterRule,
     "RatioFilterRule": RatioFilterRule,
 }

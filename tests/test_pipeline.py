@@ -10,7 +10,7 @@ def test_build_default_pipeline():
     """Pipeline builds from default YAML config."""
     pipeline = build_cleaner_pipeline()
     assert pipeline.name == "zh_clean_pipeline"
-    assert len(pipeline.steps) == 6
+    assert len(pipeline.steps) == 7
 
 
 def test_pipeline_accepts_good_record():

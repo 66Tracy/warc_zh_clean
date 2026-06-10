@@ -6,6 +6,7 @@ from warc_zh_clean.rules.pre_clean import PreCleanRule
 from warc_zh_clean.rules.chapter_filter import ChapterFilterRule
 from warc_zh_clean.rules.line_clean import LineCleanRule
 from warc_zh_clean.rules.post_filter import PostLengthFilterRule, RatioFilterRule
+from warc_zh_clean.rules.quality_signals import QualitySignalsRule
 
 __all__ = [
     "BaseRule",
@@ -14,4 +15,5 @@ __all__ = [
     "LineCleanRule",
     "PostLengthFilterRule",
     "RatioFilterRule",
+    "QualitySignalsRule",
 ]

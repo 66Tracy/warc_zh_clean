@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """ChapterFilterRule: document-level pre-filtering.
 
 Merges logic from ``core/doc_filters.pre_filtering()``
@@ -224,12 +224,6 @@ def _has_frequent_ngram(tokens_filter, N, threshold):
     return False
 
 
-def _check_ngram(text: str) -> tuple[bool, str]:
-    """Check N-gram repetition (5-gram and 15-gram)."""
-    tokens_filter = [x for x in text if x not in [" ", "\n", "-", "|"]]
-    if len(tokens_filter) < 5:
-        return True, ""
-
     if _has_frequent_ngram(tokens_filter, 5, C.PRE_NGRAM_5_THRESHOLD):
         return False, "ngram_5_high"
     try:
@@ -307,39 +301,6 @@ def _check_misc_counts(text: str, category: str, ctx_signals: "dict | None" = No
     return True, ""
 
 
-def _check_basic_quality(text: str) -> tuple[bool, str]:
-    """Check basic document quality (is_needed_document logic)."""
-    if len(text) == 0:
-        return True, ""
-
-    lines = text.split("\n")
-    length_lines = len(lines)
-
-    if len(text.split()) / len(text) > C.WHITESPACE_RATIO_MAX:
-        return False, "whitespace_ratio_high"
-
-    fuhao_zifu_rate = len(re.findall("[^一-龥]", text)) / len(text)
-    if fuhao_zifu_rate > C.NON_CJK_RATIO_MAX:
-        return False, "non_cjk_ratio_high"
-
-    count_bullet_line = sum(1 for line in lines if line.strip().startswith("•"))
-    if count_bullet_line / max(length_lines, 1) >= C.BULLET_LINE_RATIO_MAX:
-        return False, "bullet_line_ratio_high"
-
-    count_bullet_line_2 = sum(1 for line in lines if line.strip().startswith("-"))
-    if count_bullet_line_2 / max(length_lines, 1) >= C.BULLET_LINE_RATIO_MAX:
-        return False, "dash_bullet_ratio_high"
-
-    count_ellipsis = sum(
-        1
-        for line in lines
-        if line.strip().endswith("...") or line.strip().endswith("…") or line.strip().endswith("[…]")
-    )
-    if count_ellipsis / max(length_lines, 1) > C.ELLIPSIS_LINE_RATIO_MAX:
-        return False, "ellipsis_line_ratio_high"
-
-    return True, ""
-
 
 # ---------------------------------------------------------------------------
 # Rule
@@ -350,8 +311,7 @@ class ChapterFilterRule(BaseRule):
     """Document-level pre-filtering rule.
 
     Checks minimum length, category, zlib compression, repetition,
-    various count-based thresholds, density rules, bad-keyword scoring,
-    and N-gram patterns.
+    various count-based thresholds, density rules, and bad-keyword scoring.
     May reject the context with ``reject_reason="filter_rules_2"``.
     """
 
@@ -380,12 +340,6 @@ class ChapterFilterRule(BaseRule):
 
         # Bad-keyword weighted scoring
         passed, detail = _check_bad_keyword_score(ctx.text, ctx.quality_signals)
-        if not passed:
-            ctx.reject("filter_rules_2", detail)
-            return ctx
-
-        # N-gram repetition
-        passed, detail = _check_ngram(ctx.text)
         if not passed:
             ctx.reject("filter_rules_2", detail)
             return ctx

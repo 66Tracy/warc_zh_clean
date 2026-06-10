@@ -10,7 +10,7 @@ import pytest
 
 from warc_zh_clean.models import CleanContext
 from warc_zh_clean.pipelines import build_cleaner_pipeline
-from warc_zh_clean.rules.chapter_filter import _check_zlib, _check_misc_counts, _check_basic_quality
+from warc_zh_clean.rules.chapter_filter import _check_zlib, _check_misc_counts
 from warc_zh_clean.rules.post_filter import _post_filtering
 from warc_zh_clean.rules.line_clean import _is_bad_line
 import warc_zh_clean.config as C
@@ -179,17 +179,6 @@ class TestCheckMiscCountsEmptyNline:
         text = "   "
         passed, detail = _check_misc_counts(text, "科技")
         assert isinstance(passed, bool)
-
-
-# ---------------------------------------------------------------------------
-# Fix 7: _check_basic_quality empty text guard
-# ---------------------------------------------------------------------------
-
-class TestCheckBasicQualityEmpty:
-    def test_empty_string_passes(self):
-        passed, detail = _check_basic_quality("")
-        assert passed is True
-        assert detail == ""
 
 
 # ---------------------------------------------------------------------------

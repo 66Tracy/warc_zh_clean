@@ -116,6 +116,8 @@ PRE_LANG_TRANS_LIMIT = 30
 PRE_ELLIPSIS_COUNT_LIMIT = 15
 PRE_NGRAM_5_THRESHOLD = 20
 PRE_NGRAM_15_THRESHOLD = 5
+PRE_NGRAM_5_THRESHOLD = 20   # kept for back-compat; no longer used (superseded by QualitySignalsRule)
+PRE_NGRAM_15_THRESHOLD = 5   # kept for back-compat; no longer used (superseded by QualitySignalsRule)
 PRE_FAN2JIAN_DISTANCE_RATIO = 0.1
 PRE_DATE_HITS_COUNT_LIMIT = 20
 PRE_DATE_HITS_CHAR_RATIO = 0.2
@@ -428,12 +430,60 @@ POST_TRUNC_LINE_RATIO = 0.6
 
 # ============================================================================
 # Document basic quality (is_needed_document)
+# NOTE: These constants are kept for back-compatibility only.
+# QualitySignalsRule (quality_signals.py) supersedes _check_basic_quality.
 # ============================================================================
 
 WHITESPACE_RATIO_MAX = 0.2
 NON_CJK_RATIO_MAX = 0.5
 BULLET_LINE_RATIO_MAX = 0.9
 ELLIPSIS_LINE_RATIO_MAX = 0.2
+
+# ============================================================================
+# Quality signals thresholds (QualitySignalsRule — CCNet/Gopher/RefinedWeb)
+# Set any field to None to disable that individual check.
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class QualityThresholds:
+    """Per-signal thresholds for QualitySignalsRule.
+
+    Attributes:
+        cjk_ratio_min:              CJK chars / non-whitespace chars lower bound.
+        stopword_hits_min:          Distinct Chinese function-word hits lower bound.
+        symbol_ratio_max:           Decorative-symbol chars / total chars upper bound.
+        digit_ratio_max:            ASCII+fullwidth digit chars / total chars upper bound.
+        mean_line_len_min:          Mean non-empty line length (chars) lower bound.
+        ellipsis_line_ratio_max:    Fraction of non-empty lines ending in '…'/'...' upper bound.
+        bullet_line_ratio_max:      Fraction of non-empty lines starting with bullet upper bound.
+        terminal_punct_line_ratio_min:
+                                    Fraction of non-empty lines ending with terminal
+                                    punctuation lower bound (only when ≥5 non-empty lines).
+        top_ngram_2_max:            Most-frequent char 2-gram share of total chars upper bound.
+        top_ngram_3_max:            Most-frequent char 3-gram share of total chars upper bound.
+        top_ngram_4_max:            Most-frequent char 4-gram share of total chars upper bound.
+        dup_ngram_char_frac_max:    Char coverage of repeated char 10-grams upper bound.
+        unique_char_ratio_min:      Distinct chars / total chars lower bound
+                                    (only when len(text) > 2000).
+    """
+
+    cjk_ratio_min: float | None = 0.30
+    stopword_hits_min: int | None = 3
+    symbol_ratio_max: float | None = 0.10
+    digit_ratio_max: float | None = 0.30
+    mean_line_len_min: float | None = 10.0
+    ellipsis_line_ratio_max: float | None = 0.30
+    bullet_line_ratio_max: float | None = 0.90
+    terminal_punct_line_ratio_min: float | None = 0.20
+    top_ngram_2_max: float | None = 0.20
+    top_ngram_3_max: float | None = 0.18
+    top_ngram_4_max: float | None = 0.16
+    dup_ngram_char_frac_max: float | None = 0.15
+    unique_char_ratio_min: float | None = 0.03
+
+
+QUALITY_THRESHOLDS = QualityThresholds()
 
 # ============================================================================
 # Line cleaning thresholds (from line_rules.py)
