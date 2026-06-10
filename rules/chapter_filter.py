@@ -9,13 +9,35 @@ Note: ``is_needed_document()`` from the original code was never called
 in ``transform.py`` and is therefore intentionally omitted.
 """
 
+import logging
 import re
+import statistics
 import zlib
 from collections import Counter
 
 from warc_zh_clean import config as C
 from warc_zh_clean.models import CleanContext
 from warc_zh_clean.rules.base import BaseRule
+
+_log = logging.getLogger(__name__)
+
+# Optional dependency: zhconv
+try:
+    import zhconv as _zhconv
+    _ZHCONV_AVAILABLE = True
+except ImportError:
+    _zhconv = None
+    _ZHCONV_AVAILABLE = False
+    _log.warning("zhconv not available; fan2jian_distance check will be skipped")
+
+# Optional dependency: Levenshtein
+try:
+    import Levenshtein as _Levenshtein
+    _LEVENSHTEIN_AVAILABLE = True
+except ImportError:
+    _Levenshtein = None
+    _LEVENSHTEIN_AVAILABLE = False
+    _log.warning("Levenshtein not available; fan2jian_distance check will be skipped")
 
 
 # ---------------------------------------------------------------------------
@@ -47,23 +69,34 @@ def _check_category(category: str) -> tuple[bool, str]:
 def _check_zlib(text: str) -> tuple[bool, str]:
     """Check zlib compression ratio for repetition detection."""
     raw = text.encode()
+
+    # Empty text passes
+    if len(raw) == 0:
+        return True, ""
+
     compressed = zlib.compress(raw)
     meta_u = len(raw) / len(compressed)
 
     if meta_u >= C.ZLIB_FULL_THRESHOLD:
         return False, "zlib_full_high"
 
+    # Skip block check for very short texts
+    if len(raw) < C.ZLIB_BLOCK_MIN_RAW_LEN:
+        return True, ""
+
     block_num = len(text) // C.ZLIB_BLOCK_SIZE + 1
     repeat_block = 0
+    evaluated_blocks = 0
     for block_id in range(block_num):
-        raw = text[block_id * C.ZLIB_BLOCK_SIZE : (block_id + 1) * C.ZLIB_BLOCK_SIZE].encode()
-        if len(raw) < C.ZLIB_BLOCK_MIN_RAW_LEN:
+        block_raw = text[block_id * C.ZLIB_BLOCK_SIZE : (block_id + 1) * C.ZLIB_BLOCK_SIZE].encode()
+        if len(block_raw) < C.ZLIB_BLOCK_MIN_RAW_LEN:
             continue
-        compressed = zlib.compress(raw)
-        meta_u = len(raw) / len(compressed)
-        if meta_u > C.ZLIB_BLOCK_THRESHOLD:
+        evaluated_blocks += 1
+        block_compressed = zlib.compress(block_raw)
+        block_meta_u = len(block_raw) / len(block_compressed)
+        if block_meta_u > C.ZLIB_BLOCK_THRESHOLD:
             repeat_block += 1
-    if repeat_block >= max(C.ZLIB_REPEAT_BLOCK_MIN, int(block_num * C.ZLIB_REPEAT_BLOCK_FRACTION)):
+    if evaluated_blocks > 0 and repeat_block >= max(C.ZLIB_REPEAT_BLOCK_MIN, int(evaluated_blocks * C.ZLIB_REPEAT_BLOCK_FRACTION)):
         return False, "zlib_block_high"
 
     return True, ""
@@ -177,15 +210,12 @@ def _check_misc_counts(text: str, category: str) -> tuple[bool, str]:
         return False, "js_artifact_2"
 
     # Fan2jian distance
-    try:
-        import zhconv
-        import Levenshtein
-
-        fan2jian = zhconv.convert(text, "zh-cn")
-        if text != fan2jian and Levenshtein.distance(text, fan2jian) / max(len(text), len(fan2jian)) > C.PRE_FAN2JIAN_DISTANCE_RATIO:
+    if _ZHCONV_AVAILABLE and _LEVENSHTEIN_AVAILABLE:
+        fan2jian = _zhconv.convert(text, "zh-cn")
+        if text != fan2jian and _Levenshtein.distance(text, fan2jian) / max(len(text), len(fan2jian)) > C.PRE_FAN2JIAN_DISTANCE_RATIO:
             return False, "fan2jian_distance_high"
-    except ImportError:
-        pass
+    elif C.STRICT_OPTIONAL_DEPS:
+        raise ImportError("zhconv and Levenshtein are required when STRICT_OPTIONAL_DEPS=True")
 
     # Date hits density
     date_hits = (
@@ -240,16 +270,13 @@ def _check_misc_counts(text: str, category: str) -> tuple[bool, str]:
         return False, "count_threshold_exceeded"
 
     # Line length statistics
-    try:
-        import numpy as np
-    except ImportError:
-        np = None
-
     nline = [x for x in text.split("\n") if x.strip() != ""]
+    if not nline:
+        return False, "no_content_lines"
     line_len = [len(x) for x in nline]
     if max(line_len) <= C.PRE_MAX_LINE_LEN_LIMIT:
         return False, "line_len_too_short"
-    if np is not None and np.mean(line_len) <= C.PRE_MEAN_LINE_LEN_LIMIT:
+    if statistics.mean(line_len) <= C.PRE_MEAN_LINE_LEN_LIMIT:
         return False, "line_len_too_short"
 
     # Duplicate line count
@@ -276,6 +303,9 @@ def _check_misc_counts(text: str, category: str) -> tuple[bool, str]:
 
 def _check_basic_quality(text: str) -> tuple[bool, str]:
     """Check basic document quality (is_needed_document logic)."""
+    if len(text) == 0:
+        return True, ""
+
     lines = text.split("\n")
     length_lines = len(lines)
 

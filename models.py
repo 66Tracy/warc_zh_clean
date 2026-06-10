@@ -39,7 +39,8 @@ class CleanContext:
 
     def __init__(self, record: dict) -> None:
         self.record = record
-        self.text = record.get("text", "")
+        raw_text = record.get("text", "")
+        self.text = raw_text if isinstance(raw_text, str) else ""
         self.category = record.get("category_label", "")
         self.quality_label = record.get("quality_label", "")
         self.text_len = 0

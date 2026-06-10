@@ -162,7 +162,7 @@ def _is_bad_line(line: str) -> bool:
         return False
 
     # Website maintenance / font
-    if ("网站" in line and "维护" in line) or "字体：" in line and len(line) < C.LINE_WEBSITE_MAINT_MAX_LEN:
+    if (("网站" in line and "维护" in line) or "字体：" in line) and len(line) < C.LINE_WEBSITE_MAINT_MAX_LEN:
         return False
 
     # Read full text
@@ -175,9 +175,11 @@ def _is_bad_line(line: str) -> bool:
 
     # Register/login pattern
     if (
-        "注册" in line
-        and ("登录" in line or "登陆" in line or "密码" in line)
-    ) or ("电话" in line and "传真" in line) or "上篇：" in line or "下篇：" in line and len(line) < C.LINE_REGISTER_MAX_LEN:
+        ("注册" in line and ("登录" in line or "登陆" in line or "密码" in line))
+        or ("电话" in line and "传真" in line)
+        or "上篇：" in line
+        or "下篇：" in line
+    ) and len(line) < C.LINE_REGISTER_MAX_LEN:
         return False
 
     # WeChat follow

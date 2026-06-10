@@ -33,7 +33,7 @@ def _post_filtering(text: str) -> tuple[bool, str]:
 
     # Long sentence detection
     split_sents = C.POST_SPLIT_RE.split(text)
-    if max(len(x) for x in split_sents) >= C.POST_LONG_SENT_LEN:
+    if max((len(x) for x in split_sents), default=0) >= C.POST_LONG_SENT_LEN:
         return False, "post_long_sentence"
 
     # Time HH:MM density

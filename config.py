@@ -7,6 +7,12 @@ This module contains ONLY data — no business logic.
 import re
 
 # ============================================================================
+# Optional dependency behaviour
+# ============================================================================
+
+STRICT_OPTIONAL_DEPS = False  # Set True to raise ImportError on missing optional deps
+
+# ============================================================================
 # General thresholds
 # ============================================================================
 
