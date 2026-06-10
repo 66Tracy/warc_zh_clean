@@ -1,0 +1,24 @@
+[project]
+name = "warc-zh-clean"
+version = "0.1.0"
+description = "Common Crawl Chinese data cleaning pipeline"
+requires-python = ">=3.10"
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+spark = ["pyspark>=3.4"]
+quality = ["zhconv>=1.4", "Levenshtein>=0.23"]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+# The repo directory itself is the `warc_zh_clean` package (it has __init__.py),
+# so we don't build/install it; tests resolve the package via pythonpath="..".
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".."]
