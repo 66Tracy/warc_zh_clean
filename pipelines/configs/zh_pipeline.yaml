@@ -1,0 +1,26 @@
+name: zh_clean_pipeline
+
+steps:
+  - name: pre_clean
+    type: rule
+    class: PreCleanRule
+
+  - name: chapter_filter
+    type: rule
+    class: ChapterFilterRule
+
+  - name: set_text_len
+    type: hook
+    handler: set_text_len
+
+  - name: line_clean
+    type: rule
+    class: LineCleanRule
+
+  - name: post_length_filter
+    type: rule
+    class: PostLengthFilterRule
+
+  - name: ratio_filter
+    type: rule
+    class: RatioFilterRule
